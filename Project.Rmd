@@ -1,0 +1,36 @@
+---
+title: "Project"
+output: html_document
+date: "2024-12-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+if(!require(pacman))
+  install.packages("pacman")
+
+pacman::p_load(tidyverse, ggplot2, dplyr, cluster, arules, arulesViz)
+```
+
+```{r}
+data <- read.csv("/Users/praagnya/Desktop/Project DM/data/OnlineRetail.csv")
+```
+
+```{r}
+head(data)
+```
+```{r}
+# Preprocessing: Handle missing values
+data_cleaned <- data %>%
+  filter(!is.na(Description), !is.na(CustomerID))
+```
+
+```{r}
+# Check for unique values in columns
+str(data_cleaned)
+```
+
