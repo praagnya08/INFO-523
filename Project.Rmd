@@ -8,7 +8,6 @@ date: "2024-12-11"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-
 ```{r cars}
 if(!require(pacman))
   install.packages("pacman")
@@ -17,7 +16,7 @@ pacman::p_load(tidyverse, ggplot2, dplyr, cluster, arules, arulesViz, lubridate)
 ```
 
 ```{r}
-retail <- read.csv("/Users/praagnya/Desktop/Project DM/data/OnlineRetail.csv", stringsAsFactors = FALSE)
+retail <- read.csv("data/OnlineRetail.csv", stringsAsFactors = FALSE)
 ```
 
 ```{r}
@@ -101,6 +100,7 @@ retail_clean <- retail_clean %>%
 # Check the structure to confirm the changes
 str(retail_clean)
 ```
+
 ```{r}
 # Compute the maximum date from the dataset
 max_date <- max(retail_clean$InvoiceDate, na.rm = TRUE)
@@ -124,7 +124,7 @@ retail_clean <- retail_clean %>%
 
 Exploratory Data Analysis
 
-1. Transaction Volume Over Time
+1.  Transaction Volume Over Time
 
 ```{r}
 transactions_by_date <- retail_clean %>%
@@ -142,7 +142,8 @@ ggplot(transactions_by_date, aes(x = InvoiceDate, y = TransactionVolume)) +
   ) +
   theme_minimal()
 ```
-2. Revenue Over Time
+
+2.  Revenue Over Time
 
 ```{r}
 # Aggregate revenue by date
@@ -161,7 +162,8 @@ ggplot(revenue_by_date, aes(x = InvoiceDate, y = DailyRevenue)) +
   ) +
   theme_minimal()
 ```
-3. Hourly Transaction Patterns
+
+3.  Hourly Transaction Patterns
 
 ```{r}
 # Extract hour from InvoiceDate
@@ -180,7 +182,8 @@ ggplot(hourly_transactions, aes(x = Hour, y = TransactionCount)) +
   ) +
   theme_minimal()
 ```
-4. Day of the Week Analysis
+
+4.  Day of the Week Analysis
 
 ```{r}
 # Extract day of the week
@@ -199,7 +202,8 @@ ggplot(weekday_transactions, aes(x = Weekday, y = TransactionCount)) +
   ) +
   theme_minimal()
 ```
-5. Monthly Revenue by Month 
+
+5.  Monthly Revenue by Month
 
 ```{r}
 # Aggregate revenue by month
@@ -214,11 +218,12 @@ ggplot(monthly_revenue, aes(x = Month, y = MonthlyRevenue)) +
   labs(
     title = "Monthly Revenue Trends",
     x = "Month",
-    y = "Revenue"
+    y = "Revenue in $"
   ) +
   theme_minimal()
 ```
-6. Heatmap of Hourly and Weekly Patterns
+
+6.  Heatmap of Hourly and Weekly Patterns
 
 ```{r}
 # Create a heatmap of transactions by hour and weekday
@@ -241,5 +246,143 @@ ggplot(heatmap_data, aes(x = Hour, y = Weekday, fill = TransactionCount)) +
   ) +
   theme_minimal()
 ```
+
+
+CLUSTERING ALGORITHMS - K MEANS AND HIERARCHIAL
+
+```{r}
+# retail_clean
+# sapply(retail_clean, class)
+
+# 1. K Means Clustering
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(cluster)
+library(factoextra) # For better silhouette visualization
+
+# Load your dataset
+# retail_clean <- read.csv("path/to/retail_clean.csv")
+
+# Select the RFM columns for clustering
+rfm_data <- retail_clean %>%
+  select(Recency, Frequency, Monetary)
+
+# Take a sample of the data
+set.seed(123) # For reproducibility
+sample_size <- 7000 # Adjust the sample size as needed
+sample_indices <- sample(1:nrow(rfm_data), size = sample_size)
+rfm_sample <- rfm_data[sample_indices, ]
+
+# Scale the sampled data
+rfm_scaled <- scale(rfm_sample)
+
+# Determine the optimal number of clusters using the Elbow Method
+wcss <- vector()
+for (i in 1:10) {
+  kmeans_result <- kmeans(rfm_scaled, centers = i, nstart = 25)
+  wcss[i] <- kmeans_result$tot.withinss
+}
+
+# Plot the Elbow Method
+plot(1:10, wcss, type = "b", pch = 19, frame = FALSE,
+     xlab = "Number of clusters K",
+     ylab = "Total within-clusters sum of squares")
+
+# Perform k-means clustering with the chosen number of clusters
+optimal_clusters <- 3 # Choose based on the Elbow plot
+kmeans_result <- kmeans(rfm_scaled, centers = optimal_clusters, nstart = 25)
+
+# Add the cluster assignments to the sampled data
+rfm_sample$Cluster <- as.factor(kmeans_result$cluster)
+
+# Calculate silhouette score
+silhouette_score <- silhouette(kmeans_result$cluster, dist(rfm_scaled))
+
+# Visualize silhouette scores using factoextra
+fviz_silhouette(silhouette_score) +
+  labs(title = "Silhouette Plot for K-Means Clustering")
+
+# Calculate average silhouette width
+avg_silhouette_width <- mean(silhouette_score[, 3])
+cat("Average Silhouette Width:", avg_silhouette_width, "\n")
+
+# Visualize the clusters using ggplot2
+ggplot(rfm_sample, aes(x = Recency, y = Frequency, color = Cluster)) +
+  geom_point(alpha = 0.6, size = 3) +
+  labs(title = "K-Means Clustering of Retail Data (Sample)",
+       x = "Recency",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+
+
+
+```{r}
+
+# 2. Hierarchial  Clustering
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(cluster)
+library(factoextra) # For visualization
+
+# Load your dataset
+# retail_clean <- read.csv("path/to/retail_clean.csv")
+
+# Select the RFM columns for clustering
+rfm_data <- retail_clean %>%
+  select(Recency, Frequency, Monetary)
+
+# Take a sample of the data
+set.seed(123) # For reproducibility
+sample_size <- 7000 # Adjust the sample size as needed
+sample_indices <- sample(1:nrow(rfm_data), size = sample_size)
+rfm_sample <- rfm_data[sample_indices, ]
+
+# Scale the sampled data
+rfm_scaled <- scale(rfm_sample)
+
+# Compute the distance matrix
+dist_matrix <- dist(rfm_scaled, method = "euclidean")
+
+# Perform hierarchical clustering using Ward's method
+hc_result <- hclust(dist_matrix, method = "ward.D2")
+
+# Plot the dendrogram
+plot(hc_result, labels = FALSE, hang = -1, main = "Dendrogram of Hierarchical Clustering")
+
+# Cut the dendrogram into a desired number of clusters
+optimal_clusters <- 3 # Adjust based on the dendrogram
+cluster_assignments <- cutree(hc_result, k = optimal_clusters)
+
+# Add the cluster assignments to the sampled data
+rfm_sample$Cluster <- as.factor(cluster_assignments)
+
+# Calculate silhouette score
+silhouette_score <- silhouette(cluster_assignments, dist_matrix)
+
+# Visualize silhouette scores using factoextra
+fviz_silhouette(silhouette_score) +
+  labs(title = "Silhouette Plot for Hierarchical Clustering")
+
+# Calculate average silhouette width
+avg_silhouette_width <- mean(silhouette_score[, 3])
+cat("Average Silhouette Width:", avg_silhouette_width, "\n")
+
+# Visualize the clusters using ggplot2
+ggplot(rfm_sample, aes(x = Recency, y = Frequency, color = Cluster)) +
+  geom_point(alpha = 0.6, size = 3) +
+  labs(title = "Hierarchical Clustering of Retail Data (Sample)",
+       x = "Recency",
+       y = "Frequency") +
+  theme_minimal()
+
+```
+
+
 
 
