@@ -383,6 +383,80 @@ ggplot(rfm_sample, aes(x = Recency, y = Frequency, color = Cluster)) +
 
 ```
 
+ASSOCIATION ALGORITHM
+
+```{r}
+# 1. ECLAT Algorithm
+
+# Load necessary libraries
+library(arules)
+library(ggplot2)
+
+# Load your dataset
+# retail_data <- read.csv("path/to/retail_clean.csv")
+
+# Convert the dataset to a transaction format
+transactions <- as(split(retail_clean$StockCode, retail_clean$InvoiceNo), "transactions")
+
+# Apply the Eclat algorithm to find frequent itemsets
+eclat_result <- eclat(transactions, parameter = list(supp = 0.01, maxlen = 5))
+
+# Inspect the frequent itemsets
+inspect(eclat_result)
+
+# Convert the result to a data frame for visualization
+itemsets_df <- as(eclat_result, "data.frame")
+
+# Sort by support and take the top 10 itemsets
+top_itemsets <- head(itemsets_df[order(-itemsets_df$support), ], 10)
+
+# Visualize the top frequent itemsets using ggplot2
+ggplot(top_itemsets, aes(x = reorder(items, support), y = support)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 10 Frequent Itemsets",
+       x = "Itemsets",
+       y = "Support") +
+  theme_minimal()
+
+```
+
+
+```{r}
+
+# 2. FP Growth
+
+# Load necessary libraries
+library(arules)
+library(arulesViz)
+
+# Load your dataset and convert to transactions
+# retail_data <- read.csv("path/to/retail_clean.csv")
+transactions <- as(split(retail_clean$StockCode, retail_clean$InvoiceNo), "transactions")
+
+# Apply the FP-Growth algorithm to find association rules
+rules <- apriori(transactions, parameter = list(supp = 0.01, conf = 0.8))
+
+# Inspect the rules
+inspect(rules)
+
+# Sort and inspect the top rules by lift
+top_rules <- sort(rules, by = "lift")[1:10]
+inspect(top_rules)
+
+# Visualize the rules using arulesViz
+plot(top_rules, method = "graph", measure = "support", shading = "lift")
+
+# Plot a matrix of rules
+plot(rules, method = "matrix", measure = c("support", "confidence"), shading = "lift")
+
+```
+
+
+
+
+
+
 
 
 
