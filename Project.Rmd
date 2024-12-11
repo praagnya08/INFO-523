@@ -1,5 +1,5 @@
 ---
-title: "Project"
+title: "Project: Retail Data Analysis"
 output: html_document
 date: "2024-12-11"
 ---
@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 if(!require(pacman))
   install.packages("pacman")
 
-pacman::p_load(tidyverse, ggplot2, dplyr, cluster, arules, arulesViz, lubridate, factoextra)
+pacman::p_load(tidyverse, ggplot2, dplyr, cluster, arules, arulesViz, lubridate, factoextra, rpart, rpart.plot, caret, randomForest)
 ```
 
 ```{r}
@@ -137,11 +137,14 @@ ggplot(transactions_by_date, aes(x = InvoiceDate, y = TransactionVolume)) +
   geom_line() +
   labs(
     title = "Transaction Volume Over Time",
-    x = "Date",
+    x = "2011",
     y = "Number of Transactions"
   ) +
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
   theme_minimal()
 ```
+-	Transaction volume exhibits a steady increase starting from mid-year, peaking in the months leading up to December, likely due to holiday shopping.
+-	A notable dip is observed in January, which could be attributed to post-holiday season slowdown.
 
 2.  Revenue Over Time
 
@@ -156,32 +159,41 @@ revenue_by_date <- retail_clean %>%
 ggplot(revenue_by_date, aes(x = InvoiceDate, y = DailyRevenue)) +
   geom_line(color = "blue") +
   labs(
-    title = "Daily Revenue Over Time",
-    x = "Date",
+    title = "Revenue Over Time",
+    x = "2011",
     y = "Revenue"
   ) +
+  scale_x_date(date_labels = "%b", date_breaks = "1 month") +
   theme_minimal()
 ```
+	•	Revenue shows a fluctuating pattern, with notable peaks observed in the months of September and December, likely driven by seasonal sales events.
+	•	A sharp dip in revenue is evident during January, aligning with post-holiday shopping slowdown.
 
 3.  Hourly Transaction Patterns
 
 ```{r}
-# Extract hour from InvoiceDate
-hourly_transactions <- retail_clean %>%
-  mutate(Hour = lubridate::hour(InvoiceDate)) %>%
-  group_by(Hour) %>%
-  summarise(TransactionCount = n())
+library(lubridate)
 
-# Plot hourly transaction patterns
-ggplot(hourly_transactions, aes(x = Hour, y = TransactionCount)) +
+# Ensure 'Hour' is treated as a proper datetime for formatting
+transactions_by_hour <- hourly_transactions %>%
+  mutate(Time = ymd_h(paste("2011-01-01", Hour, sep = " ")))  # Use a dummy date
+
+# Plot with time-based x-axis
+ggplot(transactions_by_hour, aes(x = Time, y = TransactionCount)) +
   geom_bar(stat = "identity", fill = "skyblue") +
   labs(
     title = "Hourly Transaction Patterns",
-    x = "Hour of the Day",
-    y = "Number of Transactions"
+    x = "Time of the Day",
+    y = "Total Transactions"
+  ) +
+  scale_x_datetime(
+    date_labels = "%H:%M",  # Format as HH:MM (e.g., 00:00, 12:00)
+    date_breaks = "1 hour"  # Show tick marks every hour
   ) +
   theme_minimal()
 ```
+	•	Transactions peak during midday hours, particularly between 11:00 AM and 2:00 PM, suggesting a high level of customer activity during this period.
+	•	Early morning (before 9:00 AM) and late evening (after 6:00 PM) show significantly lower transaction volumes, indicating reduced business activity during these hours.
 
 4.  Day of the Week Analysis
 
@@ -202,6 +214,9 @@ ggplot(weekday_transactions, aes(x = Weekday, y = TransactionCount)) +
   ) +
   theme_minimal()
 ```
+	•	Transaction volume is highest on Thursdays and lowest on Sundays, indicating a peak in business activity towards the end of the week.
+	•	Weekends (Saturday and Sunday) exhibit lower transaction volumes compared to weekdays, suggesting reduced business operations or customer activity during this period.
+
 
 5.  Monthly Revenue by Month
 
@@ -222,6 +237,8 @@ ggplot(monthly_revenue, aes(x = Month, y = MonthlyRevenue)) +
   ) +
   theme_minimal()
 ```
+  •	Revenue shows a general upward trend over the year, with notable peaks in the months of September and December, likely driven by seasonal sales events.
+	•	A significant dip in revenue is observed in January, aligning with post-holiday shopping slowdown.
 
 6.  Heatmap of Hourly and Weekly Patterns
 
@@ -246,7 +263,9 @@ ggplot(heatmap_data, aes(x = Hour, y = Weekday, fill = TransactionCount)) +
   ) +
   theme_minimal()
 ```
-
+	•	The heatmap reveals distinct patterns in transaction volume based on the hour of the day and the day of the week.
+	•	Transactions are concentrated during midday hours (11:00 AM to 2:00 PM) on weekdays, with lower activity observed during early morning and late evening hours.
+	•	Weekends (Saturday and Sunday) exhibit lower transaction volumes compared to weekdays, particularly during early morning and late evening hours.
 
 CLUSTERING ALGORITHMS - K MEANS AND HIERARCHIAL
 
@@ -392,9 +411,6 @@ ASSOCIATION ALGORITHM
 library(arules)
 library(ggplot2)
 
-# Load your dataset
-# retail_data <- read.csv("path/to/retail_clean.csv")
-
 # Convert the dataset to a transaction format
 transactions <- as(split(retail_clean$StockCode, retail_clean$InvoiceNo), "transactions")
 
@@ -418,11 +434,41 @@ ggplot(top_itemsets, aes(x = reorder(items, support), y = support)) +
        x = "Itemsets",
        y = "Support") +
   theme_minimal()
-
 ```
 ```{r}
+library(dplyr)
 
+# Convert the Eclat result to a data frame
+itemsets_df <- as(eclat_result, "data.frame") %>%
+  mutate(
+    items = as.character(items),       # Convert itemsets to character
+    support = round(as.numeric(support), 4)  # Ensure numeric and round support
+  )
+
+# Split the itemsets into individual StockCodes
+itemsets_with_desc <- itemsets_df %>%
+  rowwise() %>%
+  mutate(
+    Descriptions = paste(
+      unlist(strsplit(items, ",")) %>%
+        gsub("[{}]", "", .) %>%                   # Remove curly braces
+        trimws() %>%                              # Trim whitespace
+        sapply(function(code) {                  # Map each StockCode to its description
+          desc <- retail_clean %>%
+            filter(StockCode == code) %>%
+            slice(1) %>%                          # Take the first matching description
+            pull(Description)
+          ifelse(length(desc) > 0, desc, code)   # Return description or StockCode if no match
+        }),
+      collapse = ", "                            # Combine descriptions into one string
+    )
+  ) %>%
+  select(items, Descriptions, support)           # Keep the necessary columns
+
+# Display the resulting data frame
+View(itemsets_with_desc)
 ```
+
 
 
 ```{r}
@@ -447,97 +493,115 @@ inspect(rules)
 top_rules <- sort(rules, by = "lift")[1:10]
 inspect(top_rules)
 
-# Visualize the rules using arulesViz
-plot(top_rules, method = "graph", measure = "support", shading = "lift")
-
 # Plot a matrix of rules
 plot(rules, method = "matrix", measure = c("support", "confidence"), shading = "lift")
 
+# Visualize the rules using arulesViz
+plot(top_rules, method = "graph", measure = "support", shading = "lift")
 ```
 
+| LHS Description                         | RHS Description                     | Support  | Confidence | Coverage  | Lift    | Count |
+|-----------------------------------------|-------------------------------------|----------|------------|-----------|---------|-------|
+| WHITE METAL LANTERN                     | KNITTED UNION FLAG HOT WATER BOTTLE | 0.010635 | 0.828      | 0.012844  | 56.538  | 236   |
+| CREAM CUPID HEARTS COAT HANGER          | RED WOOLLY HOTTIE WHITE HEART       | 0.010455 | 0.844      | 0.012393  | 55.060  | 232   |
+| GLASS STAR FROSTED T-LIGHT HOLDER       | SET 7 BABUSHKA NESTING BOXES        | 0.010230 | 0.819      | 0.012483  | 41.708  | 227   |
+| ASSORTED COLOUR BIRD ORNAMENT + PEARS   | PAINTED METAL PEARS ASSORTED        | 0.017891 | 0.843      | 0.021226  | 22.373  | 397   |
+| PAINTED METAL PEARS ASSORTED + LAMP     | ASSORTED COLOUR BIRD ORNAMENT       | 0.017891 | 0.880      | 0.020324  | 26.648  | 397   |
+| TEA PLATE + VINTAGE CUP                 | LAMP ANTIQUE                        | 0.012348 | 0.859      | 0.014376  | 26.002  | 274   |
+| TEA PLATE + LAMP                        | VINTAGE CUP                         | 0.012213 | 0.850      | 0.014376  | 22.549  | 271   |
+| METAL CUP + VINTAGE PLATE               | LAMP ANTIQUE                        | 0.014241 | 0.825      | 0.017260  | 21.900  | 316   |
+| METAL CUP + VINTAGE PLATE + LAMP        | LAMP ANTIQUE                        | 0.010861 | 0.880      | 0.012348  | 23.346  | 241   |
+| METAL CUP + VINTAGE PLATE + LAMP COMBO  | TEA PLATE                           | 0.010861 | 0.889      | 0.012213  | 26.922  | 241   |
+
+
+
+Classification Algorithms
+
+1. Decision Tree for Transaction Classification
 ```{r}
 # Load necessary libraries
-library(arules)
-library(arulesViz)
 library(dplyr)
-library(stringr)
+library(rpart)
+library(rpart.plot)
 
-# Prepare transactions: Replace StockCode with Description
-transactions <- retail_clean %>%
-  select(InvoiceNo, Description) %>%
-  distinct() %>%  # Ensure unique InvoiceNo-Description pairs
-  group_by(InvoiceNo) %>%
-  summarise(items = list(Description)) %>%
-  pull(items) %>%
-  as("transactions")
-
-# Apply the FP-Growth algorithm to find association rules
-rules <- apriori(transactions, parameter = list(supp = 0.01, conf = 0.8))
-
-# Inspect the rules
-inspect(rules)
-
-# Sort and inspect the top rules by lift
-top_rules <- sort(rules, by = "lift")[1:10]
-inspect(top_rules)
-
-# Customize Visualization: Smaller and Attractive Labels
-plot(
-  top_rules,
-  method = "graph",
-  measure = "support",
-  shading = "lift",
-  control = list(
-    type = "items",              # Use item-based visualization
-    nodeSize = 10,               # Adjust the size of nodes
-    edgeCol = "grey",            # Edge color
-    labelCol = "black",          # Label color
-    labelSize = 0.7,             # Label size (smaller text)
-    main = "Top Association Rules"
+# Step 1: Preprocess the data
+# Create a target variable: classify transactions as "High" or "Low" based on Amount
+retail_clean <- retail_clean %>%
+  mutate(
+    AmountCategory = ifelse(Amount > median(Amount, na.rm = TRUE), "High", "Low")
   )
+
+# Convert AmountCategory to a factor
+retail_clean$AmountCategory <- as.factor(retail_clean$AmountCategory)
+
+# Step 2: Split the data into training and testing sets
+set.seed(123)  # For reproducibility
+train_indices <- sample(1:nrow(retail_clean), 0.7 * nrow(retail_clean))
+train_data <- retail_clean[train_indices, ]
+test_data <- retail_clean[-train_indices, ]
+
+# Step 3: Build the classification model
+model <- rpart(
+  AmountCategory ~ Quantity + UnitPrice + Recency + Frequency + Monetary,
+  data = train_data,
+  method = "class"
 )
 
+# Step 4: Visualize the decision tree
+rpart.plot(model, main = "Decision Tree for Transaction Classification")
+
+# Step 5: Make predictions on the test data
+predictions <- predict(model, newdata = test_data, type = "class")
+
+# Step 6: Evaluate the model
+confusion_matrix <- table(Predicted = predictions, Actual = test_data$AmountCategory)
+print(confusion_matrix)
+
+# Calculate accuracy
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+cat("Model Accuracy:", accuracy, "\n")
 ```
 
 ```{r}
-library(arules)
-library(arulesViz)
-library(dplyr)
-library(stringr)
+# Step 5: Make predictions on the test data
+predictions <- predict(model, newdata = test_data, type = "class")
 
-# Prepare transactions: Replace StockCode with Description
-transactions <- retail_clean %>%
-  select(InvoiceNo, Description) %>%
-  distinct() %>%  # Ensure unique InvoiceNo-Description pairs
-  group_by(InvoiceNo) %>%
-  summarise(items = list(Description)) %>%
-  pull(items) %>%
-  as("transactions")
+# Step 6: Generate a confusion matrix
+confusion_matrix <- table(Predicted = predictions, Actual = test_data$AmountCategory)
+print("Confusion Matrix:")
+print(confusion_matrix)
 
-# Apply the FP-Growth algorithm to find association rules
-rules <- apriori(transactions, parameter = list(supp = 0.01, conf = 0.8))
+# Step 7: Calculate evaluation metrics
+# Accuracy
+accuracy <- sum(diag(confusion_matrix)) / sum(confusion_matrix)
+cat("Accuracy:", accuracy, "\n")
 
-# Sort and inspect the top rules by lift
-top_rules <- sort(rules, by = "lift")[1:10]
+# Precision for "High" category
+precision_high <- confusion_matrix["High", "High"] / sum(confusion_matrix["High", ])
+cat("Precision (High):", precision_high, "\n")
 
-# Improve labels: Shorten or wrap text
-labels <- labels(top_rules)
-short_labels <- str_wrap(labels, width = 20)  # Wrap labels to fit within 20 characters
+# Recall (Sensitivity) for "High" category
+recall_high <- confusion_matrix["High", "High"] / sum(confusion_matrix[, "High"])
+cat("Recall (High):", recall_high, "\n")
 
-# Visualize the graph with improved layout and labels
-plot(
-  top_rules,
-  method = "graph",
-  measure = "support",
-  shading = "lift",
-  control = list(
-    type = "items",              # Use item-based visualization
-    nodeSize = 10,               # Adjust node size
-    edgeCol = "darkgrey",        # Make edges more visible
-    labelSize = 
+# F1-Score for "High" category
+f1_high <- 2 * (precision_high * recall_high) / (precision_high + recall_high)
+cat("F1-Score (High):", f1_high, "\n")
+
+# Precision for "Low" category
+precision_low <- confusion_matrix["Low", "Low"] / sum(confusion_matrix["Low", ])
+cat("Precision (Low):", precision_low, "\n")
+
+# Recall (Sensitivity) for "Low" category
+recall_low <- confusion_matrix["Low", "Low"] / sum(confusion_matrix[, "Low"])
+cat("Recall (Low):", recall_low, "\n")
+
+# F1-Score for "Low" category
+f1_low <- 2 * (precision_low * recall_low) / (precision_low + recall_low)
+cat("F1-Score (Low):", f1_low, "\n")
 ```
 
-
+2. Random Forest for Customer Segmentation
 
 
 
