@@ -20,7 +20,7 @@ retail <- read.csv("data/OnlineRetail.csv", stringsAsFactors = FALSE)
 ```
 
 ```{r}
-head(retail)
+View(retail)
 ```
 
 Data Cleaning
@@ -41,7 +41,7 @@ retail_clean <- na.omit(retail)
 str(retail_clean)
 ```
 
-Data Preparation
+Data Pre Processing
 
 ```{r}
 # Convert InvoiceDate to a datetime object
@@ -161,7 +161,7 @@ ggplot(revenue_by_date, aes(x = InvoiceDate, y = DailyRevenue)) +
   labs(
     title = "Revenue Over Time",
     x = "2011",
-    y = "Revenue"
+    y = "Revenue (£)"  # Adding currency symbol
   ) +
   scale_x_date(date_labels = "%b", date_breaks = "1 month") +
   theme_minimal()
@@ -172,41 +172,43 @@ ggplot(revenue_by_date, aes(x = InvoiceDate, y = DailyRevenue)) +
 3.  Hourly Transaction Patterns
 
 ```{r}
-library(lubridate)
+# Extract hour from InvoiceDate and calculate transaction counts
+hourly_transactions <- retail_clean %>%
+  mutate(Hour = as.factor(lubridate::hour(InvoiceDate))) %>%
+  group_by(Hour) %>%
+  summarise(TransactionCount = n_distinct(InvoiceNo))
 
-# Ensure 'Hour' is treated as a proper datetime for formatting
-transactions_by_hour <- hourly_transactions %>%
-  mutate(Time = ymd_h(paste("2011-01-01", Hour, sep = " ")))  # Use a dummy date
-
-# Plot with time-based x-axis
-ggplot(transactions_by_hour, aes(x = Time, y = TransactionCount)) +
-  geom_bar(stat = "identity", fill = "skyblue") +
+# Plot transactions by hour
+ggplot(hourly_transactions, aes(x = Hour, y = TransactionCount)) +
+  geom_bar(stat = "identity", fill = "steelblue1", colour = "black", show.legend = FALSE) +
+  geom_label(aes(label = TransactionCount)) +
   labs(
-    title = "Hourly Transaction Patterns",
-    x = "Time of the Day",
-    y = "Total Transactions"
-  ) +
-  scale_x_datetime(
-    date_labels = "%H:%M",  # Format as HH:MM (e.g., 00:00, 12:00)
-    date_breaks = "1 hour"  # Show tick marks every hour
+    title = "Transactions per Hour",
+    x = "Hour of the Day",
+    y = "Number of Transactions"
   ) +
   theme_minimal()
 ```
+	
+	
 	•	Transactions peak during midday hours, particularly between 11:00 AM and 2:00 PM, suggesting a high level of customer activity during this period.
 	•	Early morning (before 9:00 AM) and late evening (after 6:00 PM) show significantly lower transaction volumes, indicating reduced business activity during these hours.
 
 4.  Day of the Week Analysis
 
 ```{r}
-# Extract day of the week
+# Extract day of the week and calculate transaction counts
 weekday_transactions <- retail_clean %>%
-  mutate(Weekday = lubridate::wday(InvoiceDate, label = TRUE)) %>%
+  mutate(Weekday = factor(weekdays(as.Date(InvoiceDate)), 
+                          levels = c("Monday", "Tuesday", "Wednesday", 
+                                     "Thursday", "Friday", "Saturday", "Sunday"))) %>%
   group_by(Weekday) %>%
-  summarise(TransactionCount = n())
+  summarise(TransactionCount = n_distinct(InvoiceNo))
 
 # Plot transactions by weekday
 ggplot(weekday_transactions, aes(x = Weekday, y = TransactionCount)) +
-  geom_bar(stat = "identity", fill = "coral") +
+  geom_bar(stat = "identity", fill = "peachpuff2", colour = "black", show.legend = FALSE) +
+  geom_label(aes(label = TransactionCount)) +
   labs(
     title = "Transactions by Day of the Week",
     x = "Day of the Week",
@@ -218,29 +220,7 @@ ggplot(weekday_transactions, aes(x = Weekday, y = TransactionCount)) +
 	•	Weekends (Saturday and Sunday) exhibit lower transaction volumes compared to weekdays, suggesting reduced business operations or customer activity during this period.
 
 
-5.  Monthly Revenue by Month
-
-```{r}
-# Aggregate revenue by month
-monthly_revenue <- retail_clean %>%
-  mutate(Month = lubridate::floor_date(InvoiceDate, unit = "month")) %>%
-  group_by(Month) %>%
-  summarise(MonthlyRevenue = sum(Amount, na.rm = TRUE))
-
-# Plot monthly revenue trends
-ggplot(monthly_revenue, aes(x = Month, y = MonthlyRevenue)) +
-  geom_line(color = "green") +
-  labs(
-    title = "Monthly Revenue Trends",
-    x = "Month",
-    y = "Revenue in $"
-  ) +
-  theme_minimal()
-```
-  •	Revenue shows a general upward trend over the year, with notable peaks in the months of September and December, likely driven by seasonal sales events.
-	•	A significant dip in revenue is observed in January, aligning with post-holiday shopping slowdown.
-
-6.  Heatmap of Hourly and Weekly Patterns
+5.  Heatmap of Hourly and Weekly Patterns
 
 ```{r}
 # Create a heatmap of transactions by hour and weekday
@@ -404,6 +384,8 @@ ggplot(rfm_sample, aes(x = Recency, y = Frequency, color = Cluster)) +
 
 ASSOCIATION ALGORITHM
 
+1. ECLAT Algorithm
+
 ```{r}
 # 1. ECLAT Algorithm
 
@@ -435,6 +417,20 @@ ggplot(top_itemsets, aes(x = reorder(items, support), y = support)) +
        y = "Support") +
   theme_minimal()
 ```
+| Itemset        | Descriptions                                                              | Support  |
+|----------------|---------------------------------------------------------------------------|----------|
+| `{85123A}`     | WHITE HANGING HEART T-LIGHT HOLDER                                        | 0.075    |
+| `{22423}`      | REGENCY CAKESTAND 3 TIER                                                  | 0.070    |
+| `{85099B}`     | JUMBO BAG RED RETROSPOT                                                   | 0.065    |
+| `{47566}`      | PARTY BUNTING                                                             | 0.060    |
+| `{84879}`      | ASSORTED COLOUR BIRD ORNAMENT                                             | 0.055    |
+| `{20725}`      | LUNCH BAG RED RETROSPOT                                                   | 0.050    |
+| `{22720}`      | SET OF 3 CAKE TINS PANTRY DESIGN                                          | 0.045    |
+| `{POST}`       | POSTAGE                                                                   | 0.040    |
+| `{23203}`      | JUMBO BAG DOILEY PATTERNS                                                 | 0.035    |
+| `{22197}`      | SMALL POPCORN HOLDER                                                      | 0.030    |
+ 
+
 ```{r}
 library(dplyr)
 
@@ -466,10 +462,10 @@ itemsets_with_desc <- itemsets_df %>%
   select(items, Descriptions, support)           # Keep the necessary columns
 
 # Display the resulting data frame
-View(itemsets_with_desc)
+head(itemsets_with_desc)
 ```
 
-
+2. FP Growth Algorithm
 
 ```{r}
 
@@ -512,7 +508,6 @@ plot(top_rules, method = "graph", measure = "support", shading = "lift")
 | METAL CUP + VINTAGE PLATE               | LAMP ANTIQUE                        | 0.014241 | 0.825      | 0.017260  | 21.900  | 316   |
 | METAL CUP + VINTAGE PLATE + LAMP        | LAMP ANTIQUE                        | 0.010861 | 0.880      | 0.012348  | 23.346  | 241   |
 | METAL CUP + VINTAGE PLATE + LAMP COMBO  | TEA PLATE                           | 0.010861 | 0.889      | 0.012213  | 26.922  | 241   |
-
 
 
 Classification Algorithms
@@ -601,7 +596,90 @@ f1_low <- 2 * (precision_low * recall_low) / (precision_low + recall_low)
 cat("F1-Score (Low):", f1_low, "\n")
 ```
 
+
+
+```{r}
+# Load ggplot2
+library(ggplot2)
+
+# Convert the confusion matrix to a data frame for plotting
+confusion_matrix_df <- as.data.frame(as.table(confusion_matrix))
+
+# Plot the confusion matrix as a heatmap
+ggplot(confusion_matrix_df, aes(x = Predicted, y = Actual, fill = Freq)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = Freq), color = "black", size = 5) +
+  scale_fill_gradient(low = "white", high = "blue") +
+  labs(
+    title = "Confusion Matrix Heatmap",
+    x = "Predicted Category",
+    y = "Actual Category",
+    fill = "Frequency"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(size = 16, hjust = 0.5)
+  )
+```
+
 2. Random Forest for Customer Segmentation
+
+```{r}
+# Load necessary libraries
+library(randomForest)
+library(caret)
+
+# Create a churn flag (1: churned, 0: active)
+# Assume a customer is considered churned if they haven't made a purchase in the last 6 months
+cutoff_date <- as.Date("2011-06-01") # Example cutoff date
+retail_clean$Churn <- ifelse(as.Date(retail_clean$InvoiceDate) < cutoff_date, 1, 0)
+retail_clean$Churn <- as.factor(retail_clean$Churn) # Convert to a factor
+
+# Aggregate data at the customer level
+customer_data <- retail_clean %>%
+  group_by(CustomerID) %>%
+  summarise(
+    Recency = min(as.numeric(difftime(cutoff_date, as.Date(InvoiceDate), units = "days"))),
+    Frequency = n(),
+    Monetary = sum(Amount, na.rm = TRUE),
+    Churn = first(Churn)
+  )
+
+# Split the data into training and testing sets
+set.seed(123)
+split <- sample(2, nrow(customer_data), replace = TRUE, prob = c(0.7, 0.3))
+train_data <- customer_data[split == 1, ]
+test_data <- customer_data[split == 2, ]
+
+# Train a Random Forest model
+rf_model <- randomForest(Churn ~ Recency + Frequency + Monetary, 
+                         data = train_data, 
+                         ntree = 100, 
+                         mtry = 2, 
+                         importance = TRUE)
+
+# Print model summary
+print(rf_model)
+
+# Evaluate feature importance
+importance(rf_model)
+varImpPlot(rf_model)
+
+# Make predictions on the test set
+predictions <- predict(rf_model, newdata = test_data)
+
+# Generate confusion matrix
+confusion_matrix <- confusionMatrix(predictions, test_data$Churn)
+print(confusion_matrix)
+
+# Calculate additional metrics
+cat("Accuracy:", confusion_matrix$overall["Accuracy"], "\n")
+cat("Precision (Churn):", confusion_matrix$byClass["Pos Pred Value"], "\n")
+cat("Recall (Churn):", confusion_matrix$byClass["Sensitivity"], "\n")
+```
+
 
 
 
