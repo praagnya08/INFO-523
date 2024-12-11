@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 if(!require(pacman))
   install.packages("pacman")
 
-pacman::p_load(tidyverse, ggplot2, dplyr, cluster, arules, arulesViz, lubridate)
+pacman::p_load(tidyverse, ggplot2, dplyr, cluster, arules, arulesViz, lubridate, factoextra)
 ```
 
 ```{r}
@@ -420,6 +420,9 @@ ggplot(top_itemsets, aes(x = reorder(items, support), y = support)) +
   theme_minimal()
 
 ```
+```{r}
+
+```
 
 
 ```{r}
@@ -451,6 +454,89 @@ plot(top_rules, method = "graph", measure = "support", shading = "lift")
 plot(rules, method = "matrix", measure = c("support", "confidence"), shading = "lift")
 
 ```
+
+```{r}
+# Load necessary libraries
+library(arules)
+library(arulesViz)
+library(dplyr)
+library(stringr)
+
+# Prepare transactions: Replace StockCode with Description
+transactions <- retail_clean %>%
+  select(InvoiceNo, Description) %>%
+  distinct() %>%  # Ensure unique InvoiceNo-Description pairs
+  group_by(InvoiceNo) %>%
+  summarise(items = list(Description)) %>%
+  pull(items) %>%
+  as("transactions")
+
+# Apply the FP-Growth algorithm to find association rules
+rules <- apriori(transactions, parameter = list(supp = 0.01, conf = 0.8))
+
+# Inspect the rules
+inspect(rules)
+
+# Sort and inspect the top rules by lift
+top_rules <- sort(rules, by = "lift")[1:10]
+inspect(top_rules)
+
+# Customize Visualization: Smaller and Attractive Labels
+plot(
+  top_rules,
+  method = "graph",
+  measure = "support",
+  shading = "lift",
+  control = list(
+    type = "items",              # Use item-based visualization
+    nodeSize = 10,               # Adjust the size of nodes
+    edgeCol = "grey",            # Edge color
+    labelCol = "black",          # Label color
+    labelSize = 0.7,             # Label size (smaller text)
+    main = "Top Association Rules"
+  )
+)
+
+```
+
+```{r}
+library(arules)
+library(arulesViz)
+library(dplyr)
+library(stringr)
+
+# Prepare transactions: Replace StockCode with Description
+transactions <- retail_clean %>%
+  select(InvoiceNo, Description) %>%
+  distinct() %>%  # Ensure unique InvoiceNo-Description pairs
+  group_by(InvoiceNo) %>%
+  summarise(items = list(Description)) %>%
+  pull(items) %>%
+  as("transactions")
+
+# Apply the FP-Growth algorithm to find association rules
+rules <- apriori(transactions, parameter = list(supp = 0.01, conf = 0.8))
+
+# Sort and inspect the top rules by lift
+top_rules <- sort(rules, by = "lift")[1:10]
+
+# Improve labels: Shorten or wrap text
+labels <- labels(top_rules)
+short_labels <- str_wrap(labels, width = 20)  # Wrap labels to fit within 20 characters
+
+# Visualize the graph with improved layout and labels
+plot(
+  top_rules,
+  method = "graph",
+  measure = "support",
+  shading = "lift",
+  control = list(
+    type = "items",              # Use item-based visualization
+    nodeSize = 10,               # Adjust node size
+    edgeCol = "darkgrey",        # Make edges more visible
+    labelSize = 
+```
+
 
 
 
