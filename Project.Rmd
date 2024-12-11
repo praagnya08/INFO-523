@@ -41,20 +41,81 @@ retail_clean <- na.omit(retail)
 # Check the structure of the cleaned dataset
 str(retail_clean)
 ```
+
 Data Preparation
 
 ```{r}
 # Convert InvoiceDate to a datetime object
-retail$InvoiceDate <- dmy_hm(retail$InvoiceDate)
+retail_clean$InvoiceDate <- dmy_hm(retail_clean$InvoiceDate)
 
 # Check the structure of the InvoiceDate column
-str(retail$InvoiceDate)
+str(retail_clean$InvoiceDate)
 
 # Preview the first few rows
-head(retail$InvoiceDate)
+head(retail_clean$InvoiceDate)
 ```
 
 ```{r}
+# Create a new column for Amount
+retail_clean <- retail_clean %>%
+  mutate(Amount = Quantity * UnitPrice)
 
+# Calculate RFM metrics per CustomerID
+rfm_m <- retail_clean %>%
+  group_by(CustomerID) %>%
+  summarise(Amount = sum(Amount, na.rm = TRUE))
+
+rfm_f <- retail_clean %>%
+  group_by(CustomerID) %>%
+  summarise(Frequency = n_distinct(InvoiceNo))
+
+rfm_r <- retail_clean %>%
+  group_by(CustomerID) %>%
+  summarise(LastPurchase = max(InvoiceDate)) %>%
+  mutate(Recency = as.numeric(difftime(Sys.Date(), LastPurchase, units = "days")))
+
+# Merge RFM metrics into one dataframe
+rfm <- rfm_m %>%
+  inner_join(rfm_f, by = "CustomerID") %>%
+  inner_join(rfm_r, by = "CustomerID") %>%
+  select(CustomerID, Recency, Frequency, Amount)
+
+# Join the RFM metrics back to the original dataset
+retail_clean <- retail_clean %>%
+  left_join(rfm, by = "CustomerID")
+
+# Preview the combined dataset
+head(retail_clean)
+```
+```{r}
+# Rename Amount.x to Amount and Amount.y to Monetary
+retail_clean <- retail_clean %>%
+  rename(
+    Amount = Amount.x,
+    Monetary = Amount.y
+  )
+
+# Check the structure to confirm the changes
+str(retail_clean)
+```
+```{r}
+# Compute the maximum date from the dataset
+max_date <- max(retail_clean$InvoiceDate, na.rm = TRUE)
+
+# Compute the difference between the max date and each transaction date
+retail_clean <- retail_clean %>%
+  mutate(Diff = as.numeric(difftime(max_date, InvoiceDate, units = "days")))
+
+# Preview the updated dataset
+head(retail_clean)
+```
+
+```{r}
+# Convert InvoiceDate to a datetime object
+retail_clean$InvoiceDate <- as.POSIXct(retail_clean$InvoiceDate)
+
+# Calculate the difference in days
+retail_clean <- retail_clean %>%
+  mutate(Diff = as.integer(difftime(max_date, InvoiceDate, units = "days")))
 ```
 
