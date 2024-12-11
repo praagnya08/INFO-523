@@ -13,24 +13,48 @@ knitr::opts_chunk$set(echo = TRUE)
 if(!require(pacman))
   install.packages("pacman")
 
-pacman::p_load(tidyverse, ggplot2, dplyr, cluster, arules, arulesViz)
+pacman::p_load(tidyverse, ggplot2, dplyr, cluster, arules, arulesViz, lubridate)
 ```
 
 ```{r}
-data <- read.csv("/Users/praagnya/Desktop/Project DM/data/OnlineRetail.csv")
+retail <- read.csv("/Users/praagnya/Desktop/Project DM/data/OnlineRetail.csv", stringsAsFactors = FALSE)
 ```
 
 ```{r}
-head(data)
+head(retail)
 ```
+
+Data Cleaning
+
 ```{r}
-# Preprocessing: Handle missing values
-data_cleaned <- data %>%
-  filter(!is.na(Description), !is.na(CustomerID))
+# Calculate missing values percentage
+retail_null <- round(100 * colSums(is.na(retail)) / nrow(retail), 2)
+
+# Display result
+retail_null
 ```
 
 ```{r}
-# Check for unique values in columns
-str(data_cleaned)
+# Remove rows with any missing values
+retail_clean <- na.omit(retail)
+
+# Check the structure of the cleaned dataset
+str(retail_clean)
+```
+Data Preparation
+
+```{r}
+# Convert InvoiceDate to a datetime object
+retail$InvoiceDate <- dmy_hm(retail$InvoiceDate)
+
+# Check the structure of the InvoiceDate column
+str(retail$InvoiceDate)
+
+# Preview the first few rows
+head(retail$InvoiceDate)
+```
+
+```{r}
+
 ```
 
